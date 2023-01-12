@@ -26,10 +26,6 @@ variable "region" {
   type = string
 }
 
-variable "stage" {
-  type = string
-}
-
 variable "subject_alternative_names" {
   type = list(string)
 }

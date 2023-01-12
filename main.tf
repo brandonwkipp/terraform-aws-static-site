@@ -8,19 +8,25 @@ provider "aws" {
 
 # Create an S3 bucket configured as a website
 resource "aws_s3_bucket" "domain" {
-  acl    = "public-read"
   bucket = var.bucket_name
 
-  website {
-    index_document = "index.html"
-    error_document = "404.html"
+  index_document {
+    suffix = "index.html"
+  }
+
+  error_document {
+    key = "404.html"
   }
 
   tags = {
     "Name"        = var.bucket_name
-    "Environment" = var.stage
     "ManagedBy"   = "Terraform Cloud"
   }
+}
+
+resource "aws_s3_bucket_acl" "domain" {
+  bucket = aws_s3_bucket.domain.id
+  acl    = "public-read"
 }
 
 resource "aws_s3_bucket_policy" "domain" {
@@ -56,7 +62,6 @@ resource "aws_acm_certificate" "domain" {
 
   tags = {
     "Name"        = var.bucket_name
-    "Environment" = var.stage
     "ManagedBy"   = "Terraform Cloud"
   }
 }
@@ -130,7 +135,6 @@ resource "aws_cloudfront_distribution" "domain" {
 
   tags = {
     "Name"        = var.bucket_name
-    "Environment" = var.stage
     "ManagedBy"   = "Terraform Cloud"
   }
 
