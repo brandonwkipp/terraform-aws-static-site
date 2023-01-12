@@ -10,17 +10,21 @@ provider "aws" {
 resource "aws_s3_bucket" "domain" {
   bucket = var.bucket_name
 
+  tags = {
+    "Name"        = var.bucket_name
+    "ManagedBy"   = "Terraform Cloud"
+  }
+}
+
+resource "aws_s3_bucket_website_configuration" "example" {
+  bucket = aws_s3_bucket.domain.bucket
+
   index_document {
     suffix = "index.html"
   }
 
   error_document {
     key = "404.html"
-  }
-
-  tags = {
-    "Name"        = var.bucket_name
-    "ManagedBy"   = "Terraform Cloud"
   }
 }
 
