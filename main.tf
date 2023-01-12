@@ -16,7 +16,7 @@ resource "aws_s3_bucket" "domain" {
   }
 }
 
-resource "aws_s3_bucket_website_configuration" "example" {
+resource "aws_s3_bucket_website_configuration" "domain" {
   bucket = aws_s3_bucket.domain.bucket
 
   index_document {
@@ -120,7 +120,7 @@ resource "aws_cloudfront_distribution" "domain" {
   }
 
   origin {
-    domain_name = aws_s3_bucket.domain.website_endpoint
+    domain_name = aws_s3_bucket_website_configuration.domain.website_endpoint
     origin_id   = "S3-${var.bucket_name}"
 
     custom_origin_config {
