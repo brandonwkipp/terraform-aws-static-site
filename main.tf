@@ -8,7 +8,8 @@ provider "aws" {
 
 # Create an S3 bucket configured as a website
 resource "aws_s3_bucket" "domain" {
-  bucket = var.bucket_name
+  bucket        = var.bucket_name
+  force_destroy = true
 
   tags = {
     "Name"        = var.bucket_name
