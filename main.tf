@@ -78,6 +78,34 @@ resource "aws_acm_certificate_validation" "domain" {
 }
 
 # Create a Cloudfront distribution for the S3 bucket
+resource "aws_cloudfront_function" "rewrite_index" {
+  name    = "rewrite-index-${replace(var.bucket_name, ".", "-")}"
+  runtime = "cloudfront-js-1.0"
+  comment = "Rewrite /path and /path/ to /path/index.html for static site routing"
+
+  code = <<EOF
+function handler(event) {
+  var request = event.request;
+  var uri = request.uri;
+
+  // If the request is for a "directory", serve index.html
+  if (uri.endsWith('/')) {
+    request.uri = uri + 'index.html';
+    return request;
+  }
+
+  // If there's no file extension, assume it's a directory
+  // e.g. /about -> /about/index.html
+  if (!uri.includes('.')) {
+    request.uri = uri + '/index.html';
+    return request;
+  }
+
+  return request;
+}
+EOF
+}
+
 resource "aws_cloudfront_distribution" "domain" {
   aliases             = concat(var.subject_alternative_names, keys(var.redirects), [var.bucket_name])
   default_root_object = "index.html"
@@ -96,6 +124,11 @@ resource "aws_cloudfront_distribution" "domain" {
       cookies {
         forward = "none"
       }
+    }
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.rewrite_index.arn
     }
   }
 
