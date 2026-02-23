@@ -17,18 +17,6 @@ resource "aws_s3_bucket" "domain" {
   }
 }
 
-resource "aws_s3_bucket_website_configuration" "domain" {
-  bucket = aws_s3_bucket.domain.bucket
-
-  index_document {
-    suffix = "index.html"
-  }
-
-  error_document {
-    key = "404.html"
-  }
-}
-
 resource "aws_s3_bucket_ownership_controls" "domain" {
   bucket = aws_s3_bucket.domain.id
   rule {
@@ -39,40 +27,10 @@ resource "aws_s3_bucket_ownership_controls" "domain" {
 resource "aws_s3_bucket_public_access_block" "domain" {
   bucket = aws_s3_bucket.domain.id
 
-  block_public_acls       = false
-  block_public_policy     = false
-  ignore_public_acls      = false
-  restrict_public_buckets = false
-}
-
-resource "aws_s3_bucket_acl" "domain" {
-  depends_on = [
-    aws_s3_bucket_ownership_controls.domain,
-    aws_s3_bucket_public_access_block.domain,
-  ]
-
-  bucket = aws_s3_bucket.domain.id
-  acl    = "public-read"
-}
-
-resource "aws_s3_bucket_policy" "domain" {
-  bucket = aws_s3_bucket.domain.id
-  policy = <<POLICY
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "Stmt1380877761162",
-      "Action": "s3:GetObject",
-      "Effect": "Allow",
-      "Resource": "${aws_s3_bucket.domain.arn}/*",
-      "Principal": {
-        "AWS": "*"
-      }
-    }
-  ]
-}
-POLICY
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
 # Create HTTPS certificate
@@ -142,15 +100,23 @@ resource "aws_cloudfront_distribution" "domain" {
   }
 
   origin {
-    domain_name = aws_s3_bucket_website_configuration.domain.website_endpoint
-    origin_id   = "S3-${var.bucket_name}"
+    domain_name              = aws_s3_bucket.domain.bucket_regional_domain_name
+    origin_access_control_id = aws_cloudfront_origin_access_control.domain.id
+    origin_id                = "S3-${var.bucket_name}"
+  }
 
-    custom_origin_config {
-      http_port              = "80"
-      https_port             = "443"
-      origin_protocol_policy = "http-only"
-      origin_ssl_protocols   = ["TLSv1", "TLSv1.1", "TLSv1.2"]
-    }
+  custom_error_response {
+    error_caching_min_ttl = 0
+    error_code            = 403
+    response_code         = 404
+    response_page_path    = "/404.html"
+  }
+
+  custom_error_response {
+    error_caching_min_ttl = 0
+    error_code            = 404
+    response_code         = 404
+    response_page_path    = "/404.html"
   }
 
   restrictions {
@@ -171,6 +137,37 @@ resource "aws_cloudfront_distribution" "domain" {
   }
 
   depends_on = [aws_acm_certificate_validation.domain]
+}
+
+resource "aws_cloudfront_origin_access_control" "domain" {
+  name                              = var.bucket_name
+  description                       = "OAC for ${var.bucket_name}"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+data "aws_iam_policy_document" "domain" {
+  statement {
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.domain.arn}/*"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["cloudfront.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceArn"
+      values   = [aws_cloudfront_distribution.domain.arn]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "domain" {
+  bucket = aws_s3_bucket.domain.id
+  policy = data.aws_iam_policy_document.domain.json
 }
 
 resource "aws_ssm_parameter" "domain_cloudfront_id" {
