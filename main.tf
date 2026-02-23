@@ -100,12 +100,9 @@ resource "aws_cloudfront_distribution" "domain" {
   }
 
   origin {
-    domain_name = aws_s3_bucket.domain.bucket_regional_domain_name
-    origin_id   = "S3-${var.bucket_name}"
-
-    s3_origin_config {
-      origin_access_identity = aws_cloudfront_origin_access_identity.domain.cloudfront_access_identity_path
-    }
+    domain_name              = aws_s3_bucket.domain.bucket_regional_domain_name
+    origin_id                = "S3-${var.bucket_name}"
+    origin_access_control_id = aws_cloudfront_origin_access_control.domain.id
   }
 
   custom_error_response {
@@ -142,18 +139,29 @@ resource "aws_cloudfront_distribution" "domain" {
   depends_on = [aws_acm_certificate_validation.domain]
 }
 
-resource "aws_cloudfront_origin_access_identity" "domain" {
-  comment = var.bucket_name
+resource "aws_cloudfront_origin_access_control" "domain" {
+  name                              = "oac-${replace(var.bucket_name, ".", "-")}"
+  description                       = "OAC for ${var.bucket_name}"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
 }
 
 data "aws_iam_policy_document" "domain" {
   statement {
+    sid       = "AllowCloudFrontReadOnly"
     actions   = ["s3:GetObject"]
     resources = ["${aws_s3_bucket.domain.arn}/*"]
 
     principals {
-      type        = "AWS"
-      identifiers = [aws_cloudfront_origin_access_identity.domain.iam_arn]
+      type        = "Service"
+      identifiers = ["cloudfront.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceArn"
+      values   = [aws_cloudfront_distribution.domain.arn]
     }
   }
 }
